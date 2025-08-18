@@ -1,0 +1,14 @@
+{
+  "files": {
+    "main.css": "/InfoXG/static/css/main.406904d8.css",
+    "main.js": "/InfoXG/static/js/main.7c118069.js",
+    "static/media/HeroImage.jpg": "/InfoXG/static/media/HeroImage.e6a0d380e075523e2285.jpg",
+    "index.html": "/InfoXG/index.html",
+    "main.406904d8.css.map": "/InfoXG/static/css/main.406904d8.css.map",
+    "main.7c118069.js.map": "/InfoXG/static/js/main.7c118069.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.406904d8.css",
+    "static/js/main.7c118069.js"
+  ]
+}
