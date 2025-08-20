@@ -1,1 +1,177 @@
-Helloooo
+# InfoVerseXG — System Design Blueprint
+
+*Last updated: 20 Aug 2025*
+
+---
+
+## 1) Vision & Scope
+
+**Goal:** A lightning‑fast, elegant personal portfolio for Luv (aka InfoVerseXG → InfoXG) that showcases projects, blogs/notes, and contact/availability, with a maintainable content workflow and zero‑ops hosting.
+
+**Primary outcomes**
+
+* 🚀 Instant loads on mobile/desktop, Core Web Vitals green.
+* 🧱 Reusable design system for consistent UI.
+* 📝 Simple content updates without code changes (Phase 2 via headless CMS).
+* 🔍 Good SEO despite SPA constraints.
+
+**Non‑Goals (for now)**
+
+* Full CMS authoring UI (optional later).
+* Server‑rendered app (keep SPA + pre‑render; upgrade path defined).
+
+---
+
+## 2) Users & Use Cases
+
+**Personas**
+
+* **Recruiter / Client:** Skims homepage, projects, contact. Wants fast overview and proof of skills.
+* **Engineer/Peer:** Dives into case studies, repos, tech stack.
+* **Returning Visitor:** Checks updates, availability, recent posts.
+
+**Core Use Cases**
+
+* View portfolio landing and highlights.
+* Filter/sort projects by stack or domain.
+* Open detailed case studies (long form, images, metrics).
+* Read quick notes/blogs.
+* Trigger contact (form → email + log).
+
+---
+
+## 3) Functional Requirements
+
+* **Home:** hero, elevator pitch, featured work, social links, CTA.
+* **Projects:** grid/list, filters (stack, year, domain), detail pages.
+* **Blog/Notes:** list, tags, search, detail.
+* **About:** bio, skills, timeline, certifications.
+* **Contact:** form with validation, spam protection, success/failure states.
+* **Theme:** light/dark, persisted.
+* **Search:** client‑side fuzzy across titles/tags (lunr/fuse.js).
+
+---
+
+## 4) Non‑Functional Requirements
+
+* **Performance:** LCP < 2.0s, CLS < 0.05, TBT < 200ms on 4G mid‑tier.
+* **Availability:** 99.9% (static hosting + CDN).
+* **Security:** No secrets in client; form via serverless with captcha/honeypot.
+* **Privacy:** No invasive trackers; cookieless analytics (Plausible/PostHog, opt‑in).
+* **Accessibility:** WCAG 2.1 AA; keyboard nav; prefers‑reduced‑motion.
+* **SEO:** Pre‑render + per‑route meta; sitemap & structured data.
+
+---
+
+## 5) Architecture Overview
+
+**Stack (Phase 1)**
+
+* **Frontend:** React + React Router (hash routing for GH Pages), CSS Modules + utility classes.
+* **Build:** Vite (recommended) or CRA (legacy). Code‑split per route, dynamic imports.
+* **Hosting:** GitHub Pages *or* Netlify/Vercel (preferred for previews + functions).
+* **Content Source:** Local JSON/Markdown in `/content` with typed schemas.
+* **Forms/Email:** Serverless function (Netlify/Vercel) → Email provider (e.g., Resend) and optional Google Sheet append.
+* **Analytics:** Plausible (self/hosted) or PostHog.
+* **Image Pipeline:** `sharp` at build or third‑party (Cloudinary) for responsive images.
+
+**Upgrade Path (Phase 2)**
+
+* Headless CMS (Sanity/Contentful) with GROQ/GraphQL; ISR/SSG via Next.js or Astro while preserving component library.
+
+---
+
+## 6) High‑Level Diagram (textual)
+
+```
+[Browser]
+  |  CDN cache (HTML/CSS/JS/Images)
+  v
+[Static Hosting (Netlify/Vercel/GH Pages)] ----> [Serverless Functions]
+                                                |  - submitContact
+                                                |  - newsletterSubscribe (optional)
+                                                v
+                                           [Email/SaaS: Resend]   [Sheet/DB: Notion/Sheets]
+```
+
+---
+
+## 7) Routing & Pages
+
+* `/` Home (hero, featured, testimonials, CTA)
+* `#/projects` list + filters
+* `#/projects/:slug` detail (images, metrics, links)
+* `#/notes` list (search, tags)
+* `#/notes/:slug` detail
+* `#/about`
+* `#/contact`
+* `#/privacy`, `#/terms` (optional)
+
+**SEO for SPA:** pre‑render with `prerender.io`/Netlify pre‑render plugin or migrate to Next/Astro for true SSG in Phase 2.
+
+---
+
+## 8) Component Architecture
+
+**Design System (tokens)**
+
+* Colors (light/dark), spacing scale (4/8px), radii (2xl), shadows (soft), typography ramp.
+* Motion tokens with reduced‑motion safe defaults.
+
+**Atoms:** Button, Icon, Tag, Avatar, Badge, Chip, Stat, Skeleton, Tooltip.
+
+**Molecules:** Card (project/blog), Navbar, Footer, SearchBar, FilterPill, ThemeToggle, Pagination, Modal, Toast.
+
+**Organisms:** ProjectGrid, ProjectFilters, CaseStudy, Timeline, ContactForm, Testimonials, BlogList.
+
+**Utilities:** `useTheme`, `useMediaPrefers`, `useAnalytics`, `usePrerenderCheck`.
+
+---
+
+## 9) Data Model (Type Hints)
+
+```ts
+// Project
+interface Project {
+  id: string; // slug
+  title: string;
+  tagline: string;
+  year: number;
+  stacks: string[]; // ['React','Node','ML']
+  domain: 'Web'|'AI'|'Web3'|'IoT'|'Other';
+  featured: boolean;
+  summary: string; // 280 chars
+  cover: ImageAsset;
+  gallery?: ImageAsset[];
+  repo?: string; live?: string;
+  metrics?: { kpi: string; value: string; }[];
+  contentPath: string; // markdown path for case study
+}
+
+// Blog/Note
+interface Note {
+  id: string; title: string; date: string; tags: string[]; excerpt: string; contentPath: string;
+}
+
+interface ImageAsset { src: string; alt: string; width?: number; height?: number; lqip?: string; }
+
+// Contact payload
+interface ContactPayload { name: string; email: string; message: string; source?: string; }
+```
+
+Content lives under `/content/projects/*.md` and `/content/notes/*.md` with front‑matter; build script generates a typed JSON index.
+
+---
+
+## 10) API & Serverless Contracts
+
+**POST** `/api/submitContact`
+
+* **Request:** `ContactPayload`
+* **Validation:** Zod schema; rate‑limit by IP (token bucket in KV store if available); honeypot field + captcha token.
+* **Actions:** send email via Resend; append row to Google Sheet/Notion; return 202.
+* **Response:** `{ status: 'ok', requestId, queuedAt }`
+
+**(Optional)** `/api/newsletterSubscribe`
+
+* Double opt‑in via Resend + list pr
